@@ -3,36 +3,13 @@
     "public": ".",
     "ignore": [
       "firebase.json",
-      ".firebaserc",
-      ".git*",
-      ".github/**",
-      "README.md",
+      "**/.*",
       "**/node_modules/**"
     ],
     "rewrites": [
       {
         "source": "**",
         "destination": "/index.html"
-      }
-    ],
-    "headers": [
-      {
-        "source": "**/*.@(js|html|css)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "max-age=604800"
-          }
-        ]
-      },
-      {
-        "source": "**/*.@(jpg|jpeg|png|gif|webp|ico|svg)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "max-age=2592000"
-          }
-        ]
       }
     ]
   },

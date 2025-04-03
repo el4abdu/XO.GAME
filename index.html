@@ -5,13 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>XO.GAME - Modern Tic Tac Toe</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="tactical-mode.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <div class="game-header">
-            <h1><span class="x-text">X</span><span class="o-text">O</span><span class="game-text">.GAME</span></h1>
+            <h1>
+                <span class="x-text">X</span><span class="o-text">O</span><span class="game-text">.GAME</span>
+                <span class="tactical-badge" id="tacticalBadge"><i class="fas fa-bolt"></i>TACTICAL</span>
+            </h1>
             <div class="mode-toggle">
                 <button id="darkModeToggle"><i class="fas fa-moon"></i></button>
             </div>
@@ -26,6 +30,28 @@
         </div>
 
         <div id="gameSetup" class="game-setup active">
+            <div class="game-mode-selector" id="gameModeSelector" data-active="classic">
+                <div class="mode-option active" data-mode="classic">Classic</div>
+                <div class="mode-option" data-mode="tactical">Tactical Strike</div>
+                <div class="mode-slider"></div>
+            </div>
+            
+            <div id="blitzModeToggle" class="blitz-toggle">
+                <label class="switch">
+                    <input type="checkbox" id="blitzModeCheckbox">
+                    <span class="slider round"></span>
+                </label>
+                <span>Blitz Mode (10s timer)</span>
+            </div>
+            
+            <div id="gambitModeToggle" class="gambit-toggle">
+                <label class="switch">
+                    <input type="checkbox" id="gambitModeCheckbox">
+                    <span class="slider round"></span>
+                </label>
+                <span>Gambit Mode (Bet coins)</span>
+            </div>
+            
             <div class="setup-options">
                 <button id="createGameBtn" class="create-btn">
                     <i class="fas fa-plus-circle"></i> Create New Game
@@ -39,6 +65,50 @@
                         <i class="fas fa-sign-in-alt"></i> Join Game
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <div id="gambitSetup" class="gambit-setup">
+            <div class="bet-container">
+                <h3>Place Your Bet</h3>
+                <div class="bet-amount">
+                    <button id="decreaseBet">-</button>
+                    <input type="number" id="betAmount" value="100" min="50" max="1000" step="50">
+                    <button id="increaseBet">+</button>
+                </div>
+                <p>You have <span id="playerCoins">1000</span> coins</p>
+                <button id="confirmBet" class="confirm-bet">Confirm Bet</button>
+            </div>
+        </div>
+
+        <div class="timer-container" id="blitzTimer">
+            <div class="timer-bar" id="timerBar"></div>
+        </div>
+
+        <div class="game-stats" id="gameStats">
+            <div class="player-score player-x active">
+                <span>Player X</span>
+                <div class="score-number" id="playerXScore">0</div>
+            </div>
+            <div class="score-divider">:</div>
+            <div class="player-score player-o">
+                <span>Player O</span>
+                <div class="score-number" id="playerOScore">0</div>
+            </div>
+        </div>
+
+        <div id="actionPanel" class="action-panel">
+            <div class="action-btn-tactical selected" data-action="strike">
+                <i class="fas fa-crosshairs"></i>
+                <span>Strike</span>
+            </div>
+            <div class="action-btn-tactical" data-action="defend">
+                <i class="fas fa-shield-alt"></i>
+                <span>Defend</span>
+            </div>
+            <div class="action-btn-tactical" data-action="sacrifice">
+                <i class="fas fa-exchange-alt"></i>
+                <span>Sacrifice</span>
             </div>
         </div>
 
@@ -56,9 +126,21 @@
             </div>
         </div>
 
+        <div class="replay-container" id="replayContainer">
+            <button id="replayBtn" class="replay-btn">
+                <i class="fas fa-history"></i> Replay Last Move
+            </button>
+            <button id="rematchBtn" class="rematch-btn">
+                <i class="fas fa-redo-alt"></i> REMATCH
+            </button>
+        </div>
+
         <div class="game-actions">
             <button id="copyRoomBtn" class="action-btn">
                 <i class="fas fa-copy"></i> Copy Room Code
+            </button>
+            <button id="exitRoomBtn" class="action-btn">
+                <i class="fas fa-sign-out-alt"></i> Exit Room
             </button>
             <button id="newGameBtn" class="action-btn">
                 <i class="fas fa-redo"></i> New Game
@@ -75,11 +157,12 @@
     </footer>
 
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     
     <!-- Game Scripts -->
     <script src="firebase-config.js"></script>
     <script src="app.js"></script>
+    <script src="tactical-mode.js"></script>
 </body>
 </html> 

@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const roomCodeDisplay = document.getElementById('roomCode');
   const boardCells = document.querySelectorAll('.board-cell');
   const copyRoomBtn = document.getElementById('copyRoomBtn');
+  const exitRoomBtn = document.getElementById('exitRoomBtn');
   const newGameBtn = document.getElementById('newGameBtn');
   const notification = document.getElementById('notification');
   const notificationMessage = document.getElementById('notificationMessage');
@@ -57,7 +58,17 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initially hide action buttons
     copyRoomBtn.style.display = 'none';
+    exitRoomBtn.style.display = 'none';
     newGameBtn.style.display = 'none';
+
+    // Initialize tactical mode badge as hidden
+    if (window.tacticalMode) {
+      document.getElementById('tacticalBadge').style.display = 'none';
+      document.getElementById('actionPanel').classList.remove('active');
+      document.getElementById('blitzTimer').style.display = 'none';
+      document.getElementById('gameStats').style.display = 'none';
+      document.getElementById('replayContainer').style.display = 'none';
+    }
   };
 
   // Update status message
@@ -122,13 +133,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Create a new game
   const createGame = () => {
+    // Show notification
+    showNotification('Creating new game...');
+    
+    // Get the game mode from tactical mode if available
+    const isTacticalMode = window.tacticalMode && window.tacticalMode.state.gameMode === 'tactical';
+    
     const roomCode = generateRoomCode();
+    
+    // Randomize player symbol (X or O) and first turn
+    const randomSymbols = Math.random() < 0.5;
+    const creatorSymbol = randomSymbols ? 'O' : 'X';
+    const firstTurn = Math.random() < 0.5 ? 'X' : 'O';
+    
     gameState.roomCode = roomCode;
-    gameState.playerSymbol = 'X'; // Creator is always X
-    gameState.isPlayerTurn = true; // X goes first
+    gameState.playerSymbol = creatorSymbol;
+    gameState.isPlayerTurn = firstTurn === creatorSymbol;
     gameState.gameActive = true;
     gameState.board = Array(9).fill('');
-    gameState.currentTurn = 'X';
+    gameState.currentTurn = firstTurn;
     gameState.gameEnded = false;
     gameState.winner = null;
 
@@ -136,33 +159,100 @@ document.addEventListener('DOMContentLoaded', () => {
     gameRef = database.ref(`games/${roomCode}`);
     movesRef = gameRef.child('moves');
     
-    gameRef.set({
-      createdAt: firebase.database.ServerValue.TIMESTAMP,
-      status: 'waiting',
-      currentTurn: 'X',
-      players: {
-        X: gameState.playerName
-      },
-      board: gameState.board,
-      gameEnded: false,
-      winner: null
+    // Test the Firebase connection first
+    database.ref('.info/connected').once('value')
+      .then((snapshot) => {
+        if (snapshot.val() === true) {
+          console.log('Connected to Firebase successfully');
+          
+          // Add tactical mode info to the game data if needed
+          const gameData = {
+            createdAt: firebase.database.ServerValue.TIMESTAMP,
+            status: 'waiting',
+            currentTurn: firstTurn,
+            randomSymbols: randomSymbols,
+            players: {}
+          };
+          
+          // Set the creator in the correct field based on their symbol
+          gameData.players[creatorSymbol] = gameState.playerName;
+          
+          gameData.board = gameState.board;
+          gameData.gameEnded = false;
+          gameData.winner = null;
+          
+          if (isTacticalMode) {
+            gameData.gameMode = 'tactical';
+            gameData.isBlitzMode = window.tacticalMode.state.isBlitzMode;
+            gameData.isGambitMode = window.tacticalMode.state.isGambitMode;
+          }
+          
+          return gameRef.set(gameData);
+        } else {
+          throw new Error('Not connected to Firebase');
+        }
+      })
+      .then(() => {
+        console.log('Game created successfully with code:', roomCode);
+        
+        // Listen for changes
+        setupGameListeners();
+
+        // Update UI
+        gameSetup.classList.remove('active');
+        gameBoard.classList.add('active');
+        roomCodeDisplay.textContent = roomCode;
+        playerSymbol.textContent = creatorSymbol;
+        
+        if (gameState.isPlayerTurn) {
+            updateStatusMessage("Your turn");
+        } else {
+            updateStatusMessage(`Waiting for player ${creatorSymbol === 'X' ? 'O' : 'X'} to join...`);
+        }
+        
+        // Show buttons
+        copyRoomBtn.style.display = 'flex';
+        exitRoomBtn.style.display = 'flex';
+        newGameBtn.style.display = 'none';
+        
+        // Initialize tactical mode if needed
+        if (isTacticalMode) {
+          window.tacticalMode.startTacticalGame();
+        }
+        
+        showNotification(`Game created! Room code: ${roomCode}`);
+      })
+      .catch((error) => {
+        console.error('Error creating game:', error);
+        showNotification('Error creating game: ' + error.message);
+        
+        // Try to diagnose common issues
+        checkFirebaseConnection();
+      });
+  };
+
+  // Check Firebase connection issues
+  const checkFirebaseConnection = () => {
+    // Test if we can connect to Firebase
+    database.ref('.info/connected').on('value', (snapshot) => {
+      const connected = snapshot.val();
+      console.log('Firebase connection status:', connected ? 'Connected' : 'Disconnected');
+      
+      if (!connected) {
+        showNotification('Firebase connection issue. Check your internet connection.');
+      }
     });
-
-    // Listen for changes
-    setupGameListeners();
-
-    // Update UI
-    gameSetup.classList.remove('active');
-    gameBoard.classList.add('active');
-    roomCodeDisplay.textContent = roomCode;
-    playerSymbol.textContent = 'X';
-    updateStatusMessage("Waiting for player O to join...");
     
-    // Show copy button
-    copyRoomBtn.style.display = 'flex';
-    newGameBtn.style.display = 'none';
-    
-    showNotification(`Game created! Room code: ${roomCode}`);
+    // Check database rules
+    database.ref('test_permission').set(Date.now())
+      .then(() => {
+        console.log('Database write permissions OK');
+        database.ref('test_permission').remove();
+      })
+      .catch(error => {
+        console.error('Database permission error:', error);
+        showNotification('Database permission issue: ' + error.message);
+      });
   };
 
   // Join an existing game
@@ -172,6 +262,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Show notification that we're trying to join
+    showNotification('Trying to join game...');
+    
     // Check if game exists
     const checkGameRef = database.ref(`games/${roomCode}`);
     
@@ -180,15 +273,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const gameData = snapshot.val();
         
         if (!gameData) {
-          showNotification('Game not found');
+          showNotification('Game not found. Check the room code.');
+          console.error('Game not found:', roomCode);
           return;
         }
         
+        console.log('Found game data:', JSON.stringify(gameData));
+        
+        // Check if the game is tactical mode and set up accordingly
+        if (gameData.gameMode === 'tactical' && window.tacticalMode) {
+          window.tacticalMode.setGameMode('tactical');
+          
+          if (gameData.isBlitzMode) {
+            document.getElementById('blitzModeCheckbox').checked = true;
+            window.tacticalMode.state.isBlitzMode = true;
+          }
+          
+          if (gameData.isGambitMode) {
+            document.getElementById('gambitModeCheckbox').checked = true;
+            window.tacticalMode.state.isGambitMode = true;
+          }
+        }
+        
         if (gameData.status === 'waiting') {
-          // Join as player O
+          // Determine the joiner's symbol based on creator's symbol
+          const creatorHasX = gameData.players && gameData.players.X;
+          const joinerSymbol = creatorHasX ? 'O' : 'X';
+          
           gameState.roomCode = roomCode;
-          gameState.playerSymbol = 'O';
-          gameState.isPlayerTurn = false; // X goes first
+          gameState.playerSymbol = joinerSymbol;
+          gameState.isPlayerTurn = gameData.currentTurn === joinerSymbol;
           gameState.board = gameData.board || Array(9).fill('');
           gameState.currentTurn = gameData.currentTurn || 'X';
           gameState.gameEnded = gameData.gameEnded || false;
@@ -199,29 +313,47 @@ document.addEventListener('DOMContentLoaded', () => {
           gameRef = database.ref(`games/${roomCode}`);
           movesRef = gameRef.child('moves');
           
-          gameRef.update({
-            status: 'active',
-            players: {
-              ...gameData.players,
-              O: gameState.playerName
+          // Create the update object with appropriate player field
+          const updateData = {
+            status: 'active'
+          };
+          updateData[`players.${joinerSymbol}`] = gameState.playerName;
+          
+          gameRef.update(updateData)
+          .then(() => {
+            console.log('Successfully updated game status to active');
+            
+            // Listen for changes
+            setupGameListeners();
+            
+            // Update UI
+            gameSetup.classList.remove('active');
+            gameBoard.classList.add('active');
+            roomCodeDisplay.textContent = roomCode;
+            playerSymbol.textContent = joinerSymbol;
+            
+            if (gameState.isPlayerTurn) {
+              updateStatusMessage("Your turn");
+            } else {
+              updateStatusMessage(`${gameState.currentTurn}'s turn`);
             }
+            
+            // Show action buttons
+            copyRoomBtn.style.display = 'flex';
+            exitRoomBtn.style.display = 'flex';
+            newGameBtn.style.display = 'flex';
+            
+            // Initialize tactical mode if needed
+            if (gameData.gameMode === 'tactical' && window.tacticalMode) {
+              window.tacticalMode.startTacticalGame();
+            }
+            
+            showNotification('Joined the game successfully!');
+          })
+          .catch(error => {
+            console.error('Failed to update game status:', error);
+            showNotification('Error joining game: ' + error.message);
           });
-          
-          // Listen for changes
-          setupGameListeners();
-          
-          // Update UI
-          gameSetup.classList.remove('active');
-          gameBoard.classList.add('active');
-          roomCodeDisplay.textContent = roomCode;
-          playerSymbol.textContent = 'O';
-          updateStatusMessage("X's turn");
-          
-          // Show action buttons
-          copyRoomBtn.style.display = 'flex';
-          newGameBtn.style.display = 'flex';
-          
-          showNotification('Joined the game successfully!');
         } else if (gameData.status === 'active') {
           // Check if we can reconnect as a player
           const players = gameData.players || {};
@@ -247,33 +379,47 @@ document.addEventListener('DOMContentLoaded', () => {
             const playerUpdate = {};
             playerUpdate[availableSymbol] = gameState.playerName;
             
-            gameRef.child('players').update(playerUpdate);
-            
-            // Listen for changes
-            setupGameListeners();
-            
-            // Update UI
-            gameSetup.classList.remove('active');
-            gameBoard.classList.add('active');
-            roomCodeDisplay.textContent = roomCode;
-            playerSymbol.textContent = availableSymbol;
-            updateStatusMessage(`${gameData.currentTurn}'s turn`);
-            
-            // Show action buttons
-            copyRoomBtn.style.display = 'flex';
-            newGameBtn.style.display = 'flex';
-            
-            showNotification(`Joined as Player ${availableSymbol}`);
+            gameRef.child('players').update(playerUpdate)
+              .then(() => {
+                console.log('Successfully reconnected as player:', availableSymbol);
+                
+                // Listen for changes
+                setupGameListeners();
+                
+                // Update UI
+                gameSetup.classList.remove('active');
+                gameBoard.classList.add('active');
+                roomCodeDisplay.textContent = roomCode;
+                playerSymbol.textContent = availableSymbol;
+                updateStatusMessage(`${gameData.currentTurn}'s turn`);
+                
+                // Show action buttons
+                copyRoomBtn.style.display = 'flex';
+                exitRoomBtn.style.display = 'flex';
+                newGameBtn.style.display = 'flex';
+                
+                // Initialize tactical mode if needed
+                if (gameData.gameMode === 'tactical' && window.tacticalMode) {
+                  window.tacticalMode.startTacticalGame();
+                }
+                
+                showNotification(`Joined as Player ${availableSymbol}`);
+              })
+              .catch(error => {
+                console.error('Failed to update player info:', error);
+                showNotification('Error joining game: ' + error.message);
+              });
           } else {
             showNotification('Game is already full');
           }
         } else {
-          showNotification('Cannot join this game');
+          showNotification('Cannot join this game - invalid status');
+          console.error('Invalid game status:', gameData.status);
         }
       })
       .catch((error) => {
         console.error("Error joining game:", error);
-        showNotification('Error joining game');
+        showNotification('Error joining game: ' + error.message);
       });
   };
 
@@ -344,6 +490,43 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
+    // If in tactical mode, use tactical move logic
+    if (window.tacticalMode && window.tacticalMode.state.gameMode === 'tactical') {
+      const moveResult = window.tacticalMode.makeTacticalMove(index);
+      
+      // If the tactical move was successful, update Firebase
+      if (moveResult) {
+        // Update Firebase - in a more complete implementation, we would 
+        // need to sync the tactical game state with Firebase as well
+        if (gameRef) {
+          // For simplicity, we're still updating the regular board state
+          const newBoard = [...gameState.board];
+          newBoard[index] = gameState.playerSymbol;
+          
+          gameRef.update({
+            board: newBoard,
+            currentTurn: gameState.playerSymbol === 'X' ? 'O' : 'X'
+          });
+          
+          // Record the move
+          movesRef.push({
+            player: gameState.playerSymbol,
+            position: index,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            tacticalAction: window.tacticalMode.state.currentAction
+          });
+        }
+        
+        // If in blitz mode, restart the timer
+        if (window.tacticalMode.state.isBlitzMode) {
+          startBlitzTimer();
+        }
+      }
+      
+      return;
+    }
+    
+    // Regular move in classic mode
     // Update local state
     const newBoard = [...gameState.board];
     newBoard[index] = gameState.playerSymbol;
@@ -380,13 +563,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Reset the board
-    gameRef.update({
+    const resetData = {
       board: Array(9).fill(''),
       currentTurn: 'X',
       gameEnded: false,
       winner: null,
       status: 'active'
-    });
+    };
+    
+    // If in tactical mode, reset that too
+    if (window.tacticalMode && window.tacticalMode.state.gameMode === 'tactical') {
+      window.tacticalMode.resetGame();
+    }
+    
+    gameRef.update(resetData);
     
     showNotification('Starting a new game');
   };
@@ -411,6 +601,79 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.removeChild(input);
         showNotification('Room code copied to clipboard!');
       });
+  };
+
+  // Exit the current room
+  const exitRoom = () => {
+    if (!gameRef) {
+      showNotification('Not currently in a game');
+      return;
+    }
+    
+    // Update player status in Firebase
+    if (gameState.playerSymbol && gameRef) {
+      gameRef.child('players').child(gameState.playerSymbol).remove()
+        .then(() => {
+          // Unsubscribe from listeners
+          gameRef.off();
+          if (movesRef) movesRef.off();
+          
+          // Reset game state
+          gameState = {
+            roomCode: null,
+            playerSymbol: null,
+            isPlayerTurn: false,
+            gameActive: false,
+            board: Array(9).fill(''),
+            currentTurn: 'X',
+            gameEnded: false,
+            winner: null,
+            playerName: gameState.playerName
+          };
+          
+          // Update UI
+          gameBoard.classList.remove('active');
+          gameSetup.classList.add('active');
+          roomCodeDisplay.textContent = '-';
+          playerSymbol.textContent = '-';
+          updateStatusMessage('Create a new game or join an existing one');
+          
+          // Reset game board UI
+          boardCells.forEach(cell => {
+            cell.classList.remove('x-move', 'o-move', 'winner');
+            if (window.tacticalMode) {
+              cell.classList.remove('shield', 'power-tile', 'bomb-tile', 'swap-tile', 'lock-tile', 'bomb-active');
+            }
+          });
+          
+          // Hide game action buttons
+          copyRoomBtn.style.display = 'none';
+          exitRoomBtn.style.display = 'none';
+          newGameBtn.style.display = 'none';
+          
+          // Reset tactical mode if active
+          if (window.tacticalMode) {
+            window.tacticalMode.setGameMode('classic');
+            document.getElementById('tacticalBadge').style.display = 'none';
+            document.getElementById('actionPanel').classList.remove('active');
+            document.getElementById('blitzTimer').style.display = 'none';
+            document.getElementById('gameStats').style.display = 'none';
+            document.getElementById('replayContainer').style.display = 'none';
+          }
+          
+          showNotification('Successfully left the game');
+        })
+        .catch(error => {
+          console.error('Error leaving game:', error);
+          showNotification('Error leaving game: ' + error.message);
+        });
+    } else {
+      // Just reset UI if there's no Firebase connection
+      gameBoard.classList.remove('active');
+      gameSetup.classList.add('active');
+      updateStatusMessage('Create a new game or join an existing one');
+      showNotification('Left the game');
+    }
   };
 
   // Toggle dark mode
@@ -447,6 +710,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Button event handlers
   copyRoomBtn.addEventListener('click', copyRoomCode);
+  exitRoomBtn.addEventListener('click', exitRoom);
   newGameBtn.addEventListener('click', resetGame);
   darkModeToggle.addEventListener('click', toggleDarkMode);
 
