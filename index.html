@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XO.GAME - Modern Tic Tac Toe</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="game-header">
+            <h1><span class="x-text">X</span><span class="o-text">O</span><span class="game-text">.GAME</span></h1>
+            <div class="mode-toggle">
+                <button id="darkModeToggle"><i class="fas fa-moon"></i></button>
+            </div>
+        </div>
+
+        <div class="game-status">
+            <div id="statusMessage" class="status-message">Create or Join a game</div>
+            <div id="playerInfo" class="player-info">
+                <div class="player-symbol">You: <span id="playerSymbol">-</span></div>
+                <div class="room-code">Room: <span id="roomCode">-</span></div>
+            </div>
+        </div>
+
+        <div id="gameSetup" class="game-setup active">
+            <div class="setup-options">
+                <button id="createGameBtn" class="create-btn">
+                    <i class="fas fa-plus-circle"></i> Create New Game
+                </button>
+                <div class="or-divider">
+                    <span>or</span>
+                </div>
+                <div class="join-game">
+                    <input type="text" id="joinGameInput" placeholder="Enter room code">
+                    <button id="joinGameBtn">
+                        <i class="fas fa-sign-in-alt"></i> Join Game
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="gameBoard" class="game-board">
+            <div class="board-container">
+                <div class="board-cell" data-index="0"></div>
+                <div class="board-cell" data-index="1"></div>
+                <div class="board-cell" data-index="2"></div>
+                <div class="board-cell" data-index="3"></div>
+                <div class="board-cell" data-index="4"></div>
+                <div class="board-cell" data-index="5"></div>
+                <div class="board-cell" data-index="6"></div>
+                <div class="board-cell" data-index="7"></div>
+                <div class="board-cell" data-index="8"></div>
+            </div>
+        </div>
+
+        <div class="game-actions">
+            <button id="copyRoomBtn" class="action-btn">
+                <i class="fas fa-copy"></i> Copy Room Code
+            </button>
+            <button id="newGameBtn" class="action-btn">
+                <i class="fas fa-redo"></i> New Game
+            </button>
+        </div>
+
+        <div id="notification" class="notification">
+            <p id="notificationMessage"></p>
+        </div>
+    </div>
+
+    <footer>
+        <p>Made with <i class="fas fa-heart"></i> | © 2025 XO.GAME</p>
+    </footer>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    
+    <!-- Game Scripts -->
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html> 
